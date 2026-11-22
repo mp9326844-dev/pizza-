@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pizza Shop Tycoon</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
+body{background:#2b1a12;color:#fff;min-height:100vh;padding:16px}
+h1{text-align:center;color:#ffb703;margin-bottom:10px;text-shadow:2px 2px #000}
+#hud{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;background:#3d2417;padding:10px;border-radius:12px;margin-bottom:14px}
+#hud div{background:#5c3320;padding:8px 14px;border-radius:8px;font-weight:bold}
+#game{display:grid;grid-template-columns:1fr 320px;gap:16px;max-width:1100px;margin:auto}
+@media(max-width:850px){#game{grid-template-columns:1fr}}
+#kitchen{background:#4a2c1a;border:4px solid #8b5a2b;border-radius:16px;padding:16px}
+#station{display:flex;justify-content:center;margin-bottom:16px}
+#pizza{width:260px;height:260px;border-radius:50%;background:#e0a860;border:10px solid #b97b3a;position:relative;overflow:hidden;box-shadow:0 8px 20px #000}
+.sauce{position:absolute;inset:14px;border-radius:50%;background:#c0392b;opacity:0}
+.cheese{position:absolute;inset:22px;border-radius:50%;background:#ffd54f;opacity:0}
+.topping{position:absolute;width:26px;height:26px;border-radius:50%}
+#ingredients{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+button{cursor:pointer;border:none;border-radius:10px;padding:12px 8px;font-weight:bold;font-size:14px;color:#fff;transition:.15s}
+button:hover{transform:translateY(-2px)}
+.ing{background:#7b4a25}
+.ing:disabled{opacity:.4;cursor:not-allowed;transform:none}
+#bake{background:#e67e22;width:100%;margin-top:12px;font-size:16px}
+#serve{background:#27ae60;width:100%;margin-top:8px;font-size:16px}
+#trash{background:#c0392b;width:100%;margin-top:8px}
+#orders{background:#3d2417;border-radius:16px;padding:14px}
+.order{background:#5c3320;border-radius:10px;padding:10px;margin-bottom:10px;border-left:6px solid #ffb703}
+.order.done{border-left-color:#27ae60;opacity:.65}
+.tag{display:inline-block;background:#2b1a12;padding:3px 8px;border-radius:6px;margin:2px;font-size:12px}
+#log{margin-top:10px;height:120px;overflow:auto;background:#2b1a12;border-radius:8px;padding:8px;font-size:13px}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:10}
+#panel{background:#4a2c1a;padding:24px;border-radius:16px;text-align:center;max-width:420px}
+#panel h2{color:#ffb703;margin-bottom:10px}
+#panel button{background:#27ae60;padding:12px 24px;margin-top:12px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<h1>🍕 Pizza Shop Tycoon</h1>
+<div id="hud">
+<div>💰 Money: <span id="money">50</span></div>
+<div>⭐ Reputation: <span id="rep">100</span></div>
+<div>🧑‍🍳 Day: <span id="day">1</span></div>
+<div>⏱️ Time: <span id="timer">90</span>s</div>
+</div>
+<div id="game">
+<div id="kitchen">
+<div id="station"><div id="pizza"><div class="sauce" id="sauce"></div><div class="cheese" id="cheese"></div></div></div>
+<div id="ingredients">
+<button class="ing" data-i="sauce">🥫 Tomato Sauce</button>
+<button class="ing" data-i="cheese">🧀 Cheese</button>
+<button class="ing" data-i="pepperoni">🍕 Pepperoni</button>
+<button class="ing" data-i="mushroom">🍄 Mushrooms</button>
+<button class="ing" data-i="pepper">🫑 Peppers</button>
+<button class="ing" data-i="olive">🫒 Olives</button>
+<button class="ing" data-i="onion">🧅 Onions</button>
+<button class="ing" data-i="pineapple">🍍 Pineapple</button>
+<button class="ing" data-i="basil">🌿 Basil</button>
+</div>
+<button id="bake">🔥 Bake Pizza</button>
+<button id="serve">🛎️ Serve Customer</button>
+<button id="trash">🗑️ Throw Away Pizza</button>
+</div>
+<div id="orders">
+<h3>📋 Customer Orders</h3>
+<div id="orderList"></div>
+<div id="log"></div>
+</div>
+</div>
+<div id="overlay">
+<div id="panel">
+<h2>🍕 Pizza Shop Tycoon</h2>
+<p>Make pizzas exactly as customers order: add sauce, cheese, toppings, then bake and serve.</p>
+<p>Correct orders earn money and reputation. Wrong pizzas lose reputation!</p>
+<button id="start">Start Shift</button>
+</div>
+</div>
+<script>
+const toppings=["pepperoni","mushroom","pepper","olive","onion","pineapple","basil"];
+const colors={pepperoni:"#c0392b",mushroom:"#d7bfa4",pepper:"#27ae60",olive:"#4a4a2a",onion:"#e8d8b0",pineapple:"#f1c40f",basil:"#2e8b57"};
+let money=50,rep=100,day=1,time=90,timer=null,orders=[],current=null,baked=false,used=[];
+const $=id=>document.getElementById(id);
+function log(m){const d=document.createElement("div");d.textContent=m;$("log").prepend(d);}
+function newOrder(){
+ const need=["sauce","cheese"];const extra=toppings.sort(()=>Math.random()-.5).slice(0,1+Math.floor(Math.random()*3));
+ need.push(...extra);const reward=10+extra.length*5;
+ orders.push({id:Date.now(),need,reward,done:false});renderOrders();
+ log("🧑 A customer ordered: "+need.join(", "));
+}
+function renderOrders(){
+ $("orderList").innerHTML=orders.map(o=>`<div class="order ${o.done?"done":""}"><div>Order #${String(o.id).slice(-4)} • $${o.reward}</div><div>${o.need.map(t=>`<span class="tag">${t}</span>`).join("")}</div></div>`).join("");
+}
+function add(i){
+ if(baked){log("⚠️ Pizza is already baked!");return;}
+ if(i==="sauce"||i==="cheese"){if(used.includes(i)){log("Already added!");return;}used.push(i);$(i).style.opacity=1;return;}
+ if(used.includes(i)){log("Already added!");return;}
+ used.push(i);const t=document.createElement("div");t.className="topping";t.style.background=colors[i];
+ t.style.left=30+Math.random()*180+"px";t.style.top=30+Math.random()*180+"px";$("pizza").appendChild(t);
+}
+document.querySelectorAll(".ing").forEach(b=>b.onclick=()=>add(b.dataset.i));
+$("bake").onclick=()=>{
+ if(baked){log("⚠️ Already baked!");return;}
+ if(!used.includes("sauce")||!used.includes("cheese")){log("⚠️ Add sauce and cheese first!");return;}
+ baked=true;$("pizza").style.filter="brightness(.85) sepia(.2)";log("🔥 Pizza baked!");
+};
+$("trash").onclick=()=>{resetPizza();log("🗑️ Pizza thrown away. Reputation -3");rep=Math.max(0,rep-3);updateHUD();};
+$("serve").onclick=()=>{
+ if(!orders.length){log("No waiting customer!");return;}
+ const o=orders.find(x=>!x.done);if(!o){log("No active order!");return;}
+ if(!baked){log("⚠️ Bake the pizza first!");return;}
+ const match=o.need.length===used.length&&o.need.every(x=>used.includes(x));
+ if(match){money+=o.reward;rep=Math.min(100,rep+3);o.done=true;log("✅ Perfect! Earned $"+o.reward);}
+ else{rep=Math.max(0,rep-8);o.done=true;log("❌ Wrong pizza! Reputation -8");}
+ renderOrders();resetPizza();updateHUD();
+ if(orders.every(x=>x.done)){day++;time=90;orders=[];log("🎉 Day "+day+" begins! New customers incoming.");for(let k=0;k<2;k++)newOrder();}
+};
+function resetPizza(){baked=false;used=[];$("pizza").style.filter="";$("sauce").style.opacity=0;$("cheese").style.opacity=0;
+ document.querySelectorAll(".topping").forEach(t=>t.remove());}
+function updateHUD(){$("money").textContent=money;$("rep").textContent=rep;$("day").textContent=day;}
+function tick(){
+ time--;$("timer").textContent=time;
+ if(time<=0){clearInterval(timer);endGame();return;}
+ if(time%18===0&&orders.filter(o=>!o.done).length<3)newOrder();
+}
+function endGame(){
+ clearInterval(timer);
+ $("panel").innerHTML=`<h2>Shift Over!</h2><p>You earned <b>$${money}</b> with reputation <b>${rep}</b> on day ${day}.</p><button onclick="location.reload()">Play Again</button>`;
+ $("overlay").classList.remove("hidden");
+}
+$("start").onclick=()=>{$("overlay").classList.add("hidden");newOrder();newOrder();timer=setInterval(tick,1000);};
+updateHUD();
+</script>
+</body>
+</html>
